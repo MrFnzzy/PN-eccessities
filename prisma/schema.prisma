@@ -1,0 +1,129 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  STUDENT
+  STAFF
+  SOCIAL_WORKER
+  ADMIN
+}
+
+enum Batch {
+  YEAR_2028 // first years
+  YEAR_2027 // second years
+  YEAR_2026 // third years
+}
+
+enum ReceiptStatus {
+  PENDING
+  CONFIRMED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  EXCUSED
+}
+
+model User {
+  id                  String    @id @default(cuid())
+  email               String    @unique
+  passwordHash        String
+  name                String
+  role                Role
+  resetToken          String?   @unique
+  resetTokenExpiresAt DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  student      Student?
+  staff        Staff?
+  socialWorker SocialWorker?
+  admin        Admin?
+}
+
+model Student {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName    String
+  batch       Batch
+  isClassRep  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  receipts    Receipt[]
+  attendance  Attendance[]
+
+  @@index([batch, fullName])
+}
+
+model Staff {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name   String
+}
+
+model SocialWorker {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name   String
+  batch  Batch? // assigned by admin; null until assigned
+
+  assignedAttendanceComments Attendance[] @relation("SocialWorkerComments")
+}
+
+model Admin {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name   String
+}
+
+model Receipt {
+  id             String        @id @default(cuid())
+  studentId      String
+  student        Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  fileUrl        String? // Vercel Blob URL; null if a manual/backdated entry with no scan
+  periodLabel    String // e.g. "Month 1 - July 2026"
+  submittedAt    DateTime // the date the payment/counterpart period actually covers
+  status         ReceiptStatus @default(PENDING)
+  staffComment   String?
+  addedManually  Boolean       @default(false)
+  confirmedAt    DateTime?
+  confirmedById  String?
+  createdAt      DateTime      @default(now())
+
+  // Details captured from the student for the printable Acknowledgement Receipt.
+  // Voucher No. is intentionally NOT stored here — staff fill that in by hand on the
+  // printed copy, since it's assigned at the point of physical release, not submission.
+  totalAmount    String?
+  amountInWords  String?
+  purpose        String?
+
+  @@index([studentId, submittedAt])
+}
+
+model Attendance {
+  id                  String            @id @default(cuid())
+  studentId           String
+  student             Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  date                DateTime // stored at midnight UTC for the calendar day
+  status              AttendanceStatus  @default(PRESENT)
+  excuseComment        String? // written by the class rep
+  socialWorkerComment String?
+  socialWorkerId      String?
+  socialWorker        SocialWorker?     @relation("SocialWorkerComments", fields: [socialWorkerId], references: [id])
+  markedByUserId       String? // the class rep's user id
+  updatedAt           DateTime          @updatedAt
+
+  @@unique([studentId, date])
+  @@index([date])
+}
