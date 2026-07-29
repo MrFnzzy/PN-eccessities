@@ -77,7 +77,14 @@ export default function CounterpartTab() {
           periodLabel: periodLabel || undefined,
         }),
       });
-      const data = await res.json();
+      let data: any = {};
+      try {
+        data = await res.json();
+      } catch {
+        throw new Error(
+          "Your file uploaded, but saving the receipt failed unexpectedly. Please try submitting again."
+        );
+      }
       if (!res.ok) throw new Error(data.error);
 
       play("success");
