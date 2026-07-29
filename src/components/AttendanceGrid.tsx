@@ -1,8 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import SoundButton from "@/components/SoundButton";
 import { useSound } from "@/lib/useSound";
+import CommentThread, { ThreadComment } from "@/components/CommentThread";
 
 export type GridStudent = { id: string; fullName: string; isClassRep: boolean };
 export type GridRecord = {
@@ -11,6 +11,8 @@ export type GridRecord = {
   status: "PRESENT" | "ABSENT" | "EXCUSED";
   excuseComment: string | null;
   socialWorkerComment: string | null;
+  reviewedBySW?: boolean;
+  comments?: ThreadComment[];
 };
 
 const DOT: Record<string, string> = {
@@ -24,23 +26,23 @@ export default function AttendanceGrid({
   records,
   monthStart,
   canSetStatus,
-  canSetExcuseComment,
-  canSetSocialWorkerComment,
+  canComment,
+  showNotifications = false,
+  currentUserId,
   onSave,
+  onSendComment,
+  onMarkReviewed,
 }: {
   students: GridStudent[];
   records: GridRecord[];
   monthStart: Date;
   canSetStatus: boolean;
-  canSetExcuseComment: boolean;
-  canSetSocialWorkerComment: boolean;
-  onSave: (payload: {
-    studentId: string;
-    date: string;
-    status?: string;
-    excuseComment?: string;
-    socialWorkerComment?: string;
-  }) => Promise<void>;
+  canComment: boolean;
+  showNotifications?: boolean;
+  currentUserId?: string;
+  onSave: (payload: { studentId: string; date: string; status?: string }) => Promise<void>;
+  onSendComment: (studentId: string, date: string, body: string) => Promise<void>;
+  onMarkReviewed?: (studentId: string, date: string) => Promise<void>;
 }) {
   const play = useSound();
   const daysInMonth = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0).getDate();
@@ -55,37 +57,31 @@ export default function AttendanceGrid({
     return m;
   }, [records]);
 
-  const [selected, setSelected] = useState<{ studentId: string; day: number; name: string } | null>(
-    null
-  );
+  const [selected, setSelected] = useState<{ studentId: string; day: number; name: string } | null>(null);
   const [draftStatus, setDraftStatus] = useState<string>("PRESENT");
-  const [draftExcuse, setDraftExcuse] = useState("");
-  const [draftSw, setDraftSw] = useState("");
   const [saving, setSaving] = useState(false);
+
+  function dateKey(day: number) {
+    return new Date(Date.UTC(monthStart.getFullYear(), monthStart.getMonth(), day)).toISOString();
+  }
 
   function openCell(studentId: string, day: number, name: string) {
     const rec = map.get(`${studentId}-${day}`);
     setSelected({ studentId, day, name });
     setDraftStatus(rec?.status || "PRESENT");
-    setDraftExcuse(rec?.excuseComment || "");
-    setDraftSw(rec?.socialWorkerComment || "");
     play("click");
+    if (showNotifications && onMarkReviewed && rec && !rec.reviewedBySW && (rec.status === "ABSENT" || rec.status === "EXCUSED")) {
+      onMarkReviewed(studentId, dateKey(day));
+    }
   }
 
-  async function handleSave() {
+  async function handleStatusChange(status: string) {
     if (!selected) return;
+    setDraftStatus(status);
     setSaving(true);
-    const date = new Date(Date.UTC(monthStart.getFullYear(), monthStart.getMonth(), selected.day)).toISOString();
     try {
-      await onSave({
-        studentId: selected.studentId,
-        date,
-        status: canSetStatus ? draftStatus : undefined,
-        excuseComment: canSetExcuseComment ? draftExcuse : undefined,
-        socialWorkerComment: canSetSocialWorkerComment ? draftSw : undefined,
-      });
+      await onSave({ studentId: selected.studentId, date: dateKey(selected.day), status });
       play("success");
-      setSelected(null);
     } catch {
       play("error");
     } finally {
@@ -93,17 +89,19 @@ export default function AttendanceGrid({
     }
   }
 
+  const selectedRecord = selected ? map.get(`${selected.studentId}-${selected.day}`) : undefined;
+
   return (
     <div className="rounded-xl2 border border-ink/10 bg-white shadow-card">
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-xs">
           <thead>
             <tr>
-              <th className="sticky left-0 z-10 bg-white px-3 py-2 text-left font-semibold text-ink/60">
+              <th className="sticky left-0 z-10 bg-white px-3 py-2.5 text-left font-semibold text-ink/60">
                 Student
               </th>
               {days.map((d) => (
-                <th key={d} className="px-0.5 py-2 text-center font-medium text-ink/40 w-6">
+                <th key={d} className="w-6 px-0.5 py-2.5 text-center font-medium text-ink/40">
                   {d}
                 </th>
               ))}
@@ -111,7 +109,7 @@ export default function AttendanceGrid({
           </thead>
           <tbody>
             {students.map((s) => (
-              <tr key={s.id} className="border-t border-ink/5 hover:bg-sky/5">
+              <tr key={s.id} className="border-t border-ink/5 transition-colors hover:bg-sky/5">
                 <td className="sticky left-0 z-10 bg-white px-3 py-1.5 font-medium text-ink whitespace-nowrap">
                   {s.fullName}
                   {s.isClassRep && (
@@ -123,15 +121,25 @@ export default function AttendanceGrid({
                 {days.map((d) => {
                   const rec = map.get(`${s.id}-${d}`);
                   const isSelected = selected?.studentId === s.id && selected?.day === d;
+                  const flagged = rec && (rec.status === "ABSENT" || rec.status === "EXCUSED");
+                  const unread = showNotifications && flagged && !rec?.reviewedBySW;
+                  const hasComments = (rec?.comments?.length || 0) > 0;
                   return (
                     <td key={d} className="p-0.5">
                       <button
                         onClick={() => openCell(s.id, d, s.fullName)}
-                        title={rec?.excuseComment || rec?.socialWorkerComment || ""}
-                        className={`h-5 w-5 rounded ${rec ? DOT[rec.status] : "bg-ink/10"} ${
-                          isSelected ? "ring-2 ring-offset-1 ring-ink" : ""
-                        } hover:opacity-80 transition-opacity`}
-                      />
+                        title={s.fullName}
+                        className={`relative h-6 w-6 rounded-md transition-all ${
+                          rec ? DOT[rec.status] : "bg-ink/10"
+                        } ${isSelected ? "ring-2 ring-offset-1 ring-ink" : ""} hover:scale-110 hover:opacity-90`}
+                      >
+                        {unread && (
+                          <span className="absolute -right-0.5 -top-0.5 h-2 w-2 animate-pulse rounded-full bg-amber-burnt ring-2 ring-white" />
+                        )}
+                        {!unread && hasComments && (
+                          <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-ink/40 ring-2 ring-white" />
+                        )}
+                      </button>
                     </td>
                   );
                 })}
@@ -142,10 +150,10 @@ export default function AttendanceGrid({
       </div>
 
       {selected && (
-        <div className="border-t border-ink/10 bg-cream p-4 animate-slide-up">
+        <div className="animate-slide-up border-t border-ink/10 bg-cream p-4">
           <div className="flex items-center justify-between">
-            <p className="font-semibold text-ink">
-              {selected.name} · Day {selected.day}
+            <p className="font-display font-semibold text-ink">
+              {selected.name} · {monthStart.toLocaleDateString(undefined, { month: "short" })} {selected.day}
             </p>
             <button onClick={() => setSelected(null)} className="text-sm text-ink/40 hover:text-ink">
               ✕
@@ -157,9 +165,10 @@ export default function AttendanceGrid({
               {["PRESENT", "ABSENT", "EXCUSED"].map((s) => (
                 <button
                   key={s}
-                  onClick={() => setDraftStatus(s)}
-                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
-                    draftStatus === s ? `${DOT[s]} text-white` : "bg-ink/5 text-ink/60"
+                  onClick={() => handleStatusChange(s)}
+                  disabled={saving}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50 ${
+                    draftStatus === s ? `${DOT[s]} text-white` : "bg-ink/5 text-ink/60 hover:bg-ink/10"
                   }`}
                 >
                   {s.charAt(0) + s.slice(1).toLowerCase()}
@@ -168,38 +177,16 @@ export default function AttendanceGrid({
             </div>
           )}
 
-          {canSetExcuseComment && (
-            <div className="mt-3">
-              <label className="block text-xs font-semibold text-ink/60">
-                Excuse / note (class rep)
-              </label>
-              <textarea
-                value={draftExcuse}
-                onChange={(e) => setDraftExcuse(e.target.value)}
-                rows={2}
-                className="mt-1 w-full rounded-lg border border-ink/15 px-3 py-2 text-sm outline-none focus:border-sky"
-                placeholder="e.g. Sick, submitted med cert"
-              />
-            </div>
-          )}
-
-          {canSetSocialWorkerComment && (
-            <div className="mt-3">
-              <label className="block text-xs font-semibold text-ink/60">
-                Social worker comment
-              </label>
-              <textarea
-                value={draftSw}
-                onChange={(e) => setDraftSw(e.target.value)}
-                rows={2}
-                className="mt-1 w-full rounded-lg border border-ink/15 px-3 py-2 text-sm outline-none focus:border-sky"
-              />
-            </div>
-          )}
-
-          <SoundButton onClick={handleSave} disabled={saving} className="mt-3">
-            {saving ? "Saving…" : "Save"}
-          </SoundButton>
+          <div className="mt-3">
+            <label className="mb-1 block text-xs font-semibold text-ink/60">Notes</label>
+            <CommentThread
+              comments={(selectedRecord?.comments as ThreadComment[]) || []}
+              currentUserId={currentUserId}
+              canReply={canComment}
+              emptyLabel="No notes yet — leave one below."
+              onSend={(body) => onSendComment(selected.studentId, dateKey(selected.day), body)}
+            />
+          </div>
         </div>
       )}
     </div>

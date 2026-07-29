@@ -2,20 +2,9 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireSession } from "@/lib/guard";
 import { BATCHES } from "@/lib/batches";
+import { resolveBatchAccess } from "@/lib/attendanceAccess";
 
-// Resolves which batch the current user is allowed to view/edit attendance for.
-async function resolveBatchAccess(session: NonNullable<Awaited<ReturnType<typeof requireSession>>>) {
-  if (session.user.role === "SOCIAL_WORKER") {
-    const sw = await prisma.socialWorker.findUnique({ where: { userId: session.user.id } });
-    return sw?.batch ?? null;
-  }
-  if (session.user.role === "STUDENT" && session.user.isClassRep) {
-    const student = await prisma.student.findUnique({ where: { id: session.user.profileId! } });
-    return student?.batch ?? null;
-  }
-  if (session.user.role === "ADMIN") return "ANY";
-  return null;
-}
+const COMMENTS_INCLUDE = { comments: { orderBy: { createdAt: "asc" as const } } };
 
 export async function GET(req: Request) {
   const session = await requireSession();
@@ -34,6 +23,7 @@ export async function GET(req: Request) {
     const end = new Date(start.getFullYear(), start.getMonth() + 1, 1);
     const records = await prisma.attendance.findMany({
       where: { studentId: session.user.profileId, date: { gte: start, lt: end } },
+      include: COMMENTS_INCLUDE,
     });
     return NextResponse.json({ students: [], records, monthStart: start.toISOString(), selfOnly: true });
   }
@@ -56,7 +46,8 @@ export async function GET(req: Request) {
   });
 
   const records = await prisma.attendance.findMany({
-    where: { studentId: { in: students.map((s) => s.id) }, date: { gte: start, lt: end } },
+    where: { studentId: { in: students.map((s: { id: string }) => s.id) }, date: { gte: start, lt: end } },
+    include: COMMENTS_INCLUDE,
   });
 
   return NextResponse.json({ students, records, monthStart: start.toISOString() });
@@ -96,6 +87,16 @@ export async function POST(req: Request) {
   }
   if (isClassRepEditor) data.markedByUserId = session.user.id;
 
+  // Notification bookkeeping: a class rep flagging someone absent/excused raises a flag
+  // for the social worker; the social worker (or admin) setting a status clears it.
+  if (status) {
+    if (isClassRepEditor) {
+      data.reviewedBySW = status === "PRESENT";
+    } else if (isSocialWorkerEditor) {
+      data.reviewedBySW = true;
+    }
+  }
+
   const record = await prisma.attendance.upsert({
     where: { studentId_date: { studentId, date: day } },
     update: data,
@@ -106,7 +107,9 @@ export async function POST(req: Request) {
       excuseComment: excuseComment || null,
       socialWorkerComment: socialWorkerComment || null,
       markedByUserId: isClassRepEditor ? session.user.id : null,
+      reviewedBySW: isClassRepEditor ? status !== "ABSENT" && status !== "EXCUSED" : true,
     },
+    include: COMMENTS_INCLUDE,
   });
 
   return NextResponse.json({ ok: true, record });

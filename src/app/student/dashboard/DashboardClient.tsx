@@ -17,13 +17,13 @@ export default function StudentDashboardClient({
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
-      <div className="mb-6">
-        <p className="text-sm font-semibold text-sky-deep">Welcome back</p>
-        <h1 className="font-display text-2xl font-bold text-ink sm:text-3xl">{name}</h1>
+      <div className="mb-6 overflow-hidden rounded-xl2 bg-gradient-to-br from-sky to-sky-deep px-6 py-7 text-white shadow-pop sm:px-8">
+        <p className="text-sm font-semibold text-white/80">Welcome back</p>
+        <h1 className="font-display text-2xl font-bold sm:text-3xl">{name}</h1>
         {isClassRep && (
           <Link
             href="/class-rep/dashboard"
-            className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-amber/15 px-3 py-1 text-xs font-semibold text-amber-burnt"
+            className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur transition-colors hover:bg-white/25"
           >
             ★ You're the class rep — mark attendance
           </Link>

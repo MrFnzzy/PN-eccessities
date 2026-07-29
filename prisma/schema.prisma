@@ -117,13 +117,29 @@ model Attendance {
   student             Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
   date                DateTime // stored at midnight UTC for the calendar day
   status              AttendanceStatus  @default(PRESENT)
-  excuseComment        String? // written by the class rep
-  socialWorkerComment String?
+  excuseComment        String? // written by the class rep (legacy single-note field, kept for backwards compatibility)
+  socialWorkerComment String? // legacy single-note field, kept for backwards compatibility
   socialWorkerId      String?
   socialWorker        SocialWorker?     @relation("SocialWorkerComments", fields: [socialWorkerId], references: [id])
   markedByUserId       String? // the class rep's user id
+  reviewedBySW        Boolean           @default(true) // false = unread notification for the social worker
   updatedAt           DateTime          @updatedAt
+
+  comments            AttendanceComment[]
 
   @@unique([studentId, date])
   @@index([date])
+}
+
+model AttendanceComment {
+  id           String     @id @default(cuid())
+  attendanceId String
+  attendance   Attendance @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
+  authorUserId String
+  authorName   String
+  authorRole   Role
+  body         String
+  createdAt    DateTime   @default(now())
+
+  @@index([attendanceId, createdAt])
 }
