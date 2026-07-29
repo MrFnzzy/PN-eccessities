@@ -1,4 +1,4 @@
-# Campus Companion
+# PN-eccessities
 
 Student registration, counterpart receipts, staff review with email confirmation,
 and a class attendance calendar for social workers and class reps — built for
@@ -57,8 +57,8 @@ Variables when you deploy.
 ```bash
 git init
 git add .
-git commit -m "Campus Companion"
-gh repo create campus-companion --private --source=. --push
+git commit -m "PN-eccessities"
+gh repo create pn-eccessities --private --source=. --push
 # (or create a repo on github.com and follow the "push an existing repo" instructions)
 ```
 

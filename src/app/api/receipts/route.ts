@@ -52,6 +52,15 @@ export async function POST(req: Request) {
       if (!body.fileUrl) {
         return NextResponse.json({ error: "Please attach your receipt." }, { status: 400 });
       }
+      if (!body.totalAmount || !String(body.totalAmount).trim()) {
+        return NextResponse.json({ error: "Please enter the total amount received." }, { status: 400 });
+      }
+      if (!body.amountInWords || !String(body.amountInWords).trim()) {
+        return NextResponse.json({ error: "Please spell out the amount in words." }, { status: 400 });
+      }
+      if (!body.purpose || !String(body.purpose).trim()) {
+        return NextResponse.json({ error: "Please describe the purpose of this receipt." }, { status: 400 });
+      }
       const receipt = await prisma.receipt.create({
         data: {
           studentId: session.user.profileId,
@@ -60,6 +69,9 @@ export async function POST(req: Request) {
           submittedAt: body.submittedAt ? new Date(body.submittedAt) : new Date(),
           status: "PENDING",
           addedManually: false,
+          totalAmount: String(body.totalAmount).trim(),
+          amountInWords: String(body.amountInWords).trim(),
+          purpose: String(body.purpose).trim(),
         },
       });
       return NextResponse.json({ ok: true, receipt });
@@ -84,6 +96,9 @@ export async function POST(req: Request) {
           addedManually: true,
           confirmedAt: body.status === "CONFIRMED" ? new Date() : null,
           confirmedById: body.status === "CONFIRMED" ? session.user.id : null,
+          totalAmount: body.totalAmount ? String(body.totalAmount).trim() : null,
+          amountInWords: body.amountInWords ? String(body.amountInWords).trim() : null,
+          purpose: body.purpose ? String(body.purpose).trim() : null,
         },
       });
       return NextResponse.json({ ok: true, receipt });

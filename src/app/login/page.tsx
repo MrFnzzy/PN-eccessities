@@ -35,7 +35,7 @@ function LoginForm() {
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-10">
       <h1 className="font-display text-2xl font-bold text-ink">Welcome back</h1>
-      <p className="mt-1 text-sm text-ink/60">Sign in to your Campus Companion account.</p>
+      <p className="mt-1 text-sm text-ink/60">Sign in to your PN-eccessities account.</p>
 
       {params.get("registered") && (
         <p className="mt-4 rounded-xl bg-sky/10 px-3 py-2 text-sm text-sky-deep">

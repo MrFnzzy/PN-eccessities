@@ -17,7 +17,7 @@ function getTransport() {
 }
 
 const FROM = () =>
-  `"${process.env.SMTP_FROM_NAME || "Campus Companion"}" <${process.env.SMTP_USER}>`;
+  `"${process.env.SMTP_FROM_NAME || "PN-eccessities"}" <${process.env.SMTP_USER}>`;
 
 export async function sendReceiptConfirmationEmail(opts: {
   to: string;

@@ -101,6 +101,13 @@ model Receipt {
   confirmedById  String?
   createdAt      DateTime      @default(now())
 
+  // Details captured from the student for the printable Acknowledgement Receipt.
+  // Voucher No. is intentionally NOT stored here — staff fill that in by hand on the
+  // printed copy, since it's assigned at the point of physical release, not submission.
+  totalAmount    String?
+  amountInWords  String?
+  purpose        String?
+
   @@index([studentId, submittedAt])
 }
 

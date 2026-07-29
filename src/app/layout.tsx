@@ -3,7 +3,7 @@ import "./globals.css";
 import Providers from "@/components/Providers";
 
 export const metadata: Metadata = {
-  title: "Campus Companion",
+  title: "PN-eccessities",
   description: "Counterpart receipts, attendance, and class management.",
 };
 

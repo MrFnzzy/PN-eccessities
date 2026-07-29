@@ -24,9 +24,9 @@ export default function Navbar() {
           onClick={() => play("pop")}
         >
           <span className="grid h-8 w-8 place-items-center rounded-xl bg-sky text-white shadow-pop">
-            CC
+            PN
           </span>
-          Campus Companion
+          PN-eccessities
         </Link>
 
         {session && (

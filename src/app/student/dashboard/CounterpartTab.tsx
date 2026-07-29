@@ -13,6 +13,9 @@ type Receipt = {
   status: "PENDING" | "CONFIRMED";
   staffComment: string | null;
   addedManually: boolean;
+  totalAmount: string | null;
+  amountInWords: string | null;
+  purpose: string | null;
 };
 
 export default function CounterpartTab() {
@@ -21,6 +24,9 @@ export default function CounterpartTab() {
   const [loading, setLoading] = useState(true);
   const [file, setFile] = useState<File | null>(null);
   const [periodLabel, setPeriodLabel] = useState("");
+  const [totalAmount, setTotalAmount] = useState("");
+  const [amountInWords, setAmountInWords] = useState("");
+  const [purpose, setPurpose] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -40,6 +46,11 @@ export default function CounterpartTab() {
     e.preventDefault();
     if (!file) {
       setMessage("Please attach your receipt image or PDF.");
+      play("error");
+      return;
+    }
+    if (!totalAmount.trim() || !amountInWords.trim() || !purpose.trim()) {
+      setMessage("Please fill in the total amount, amount in words, and purpose.");
       play("error");
       return;
     }
@@ -75,6 +86,9 @@ export default function CounterpartTab() {
         body: JSON.stringify({
           fileUrl: uploadData.url,
           periodLabel: periodLabel || undefined,
+          totalAmount: totalAmount.trim(),
+          amountInWords: amountInWords.trim(),
+          purpose: purpose.trim(),
         }),
       });
       let data: any = {};
@@ -90,6 +104,9 @@ export default function CounterpartTab() {
       play("success");
       setFile(null);
       setPeriodLabel("");
+      setTotalAmount("");
+      setAmountInWords("");
+      setPurpose("");
       setMessage("Receipt submitted! Staff will review and confirm it.");
       load();
     } catch (err: any) {
@@ -116,6 +133,30 @@ export default function CounterpartTab() {
           value={periodLabel}
           onChange={(e) => setPeriodLabel(e.target.value)}
           placeholder="e.g. Month 3 - September 2026"
+          className="mt-1 w-full rounded-xl border border-ink/15 px-3.5 py-2.5 text-sm outline-none focus:border-sky"
+        />
+
+        <label className="mt-4 block text-sm font-semibold text-ink/80">Total amount received</label>
+        <input
+          value={totalAmount}
+          onChange={(e) => setTotalAmount(e.target.value)}
+          placeholder="e.g. 1,500.00"
+          className="mt-1 w-full rounded-xl border border-ink/15 px-3.5 py-2.5 text-sm outline-none focus:border-sky"
+        />
+
+        <label className="mt-4 block text-sm font-semibold text-ink/80">Amount in words</label>
+        <input
+          value={amountInWords}
+          onChange={(e) => setAmountInWords(e.target.value)}
+          placeholder="e.g. One thousand five hundred pesos"
+          className="mt-1 w-full rounded-xl border border-ink/15 px-3.5 py-2.5 text-sm outline-none focus:border-sky"
+        />
+
+        <label className="mt-4 block text-sm font-semibold text-ink/80">Purpose</label>
+        <input
+          value={purpose}
+          onChange={(e) => setPurpose(e.target.value)}
+          placeholder="e.g. Travel - taxi fare"
           className="mt-1 w-full rounded-xl border border-ink/15 px-3.5 py-2.5 text-sm outline-none focus:border-sky"
         />
 
@@ -165,6 +206,13 @@ export default function CounterpartTab() {
                   </div>
                   <StatusBadge status={r.status} />
                 </div>
+                {(r.totalAmount || r.purpose) && (
+                  <p className="mt-2 text-xs text-ink/60">
+                    {r.totalAmount && <span className="font-semibold">₱{r.totalAmount}</span>}
+                    {r.totalAmount && r.purpose && " · "}
+                    {r.purpose}
+                  </p>
+                )}
                 {r.staffComment && (
                   <p className="mt-2 rounded-lg bg-ink/5 px-3 py-2 text-xs text-ink/70">
                     <span className="font-semibold">Staff comment: </span>

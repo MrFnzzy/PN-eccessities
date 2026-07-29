@@ -13,6 +13,9 @@ type Receipt = {
   status: "PENDING" | "CONFIRMED";
   staffComment: string | null;
   addedManually: boolean;
+  totalAmount: string | null;
+  amountInWords: string | null;
+  purpose: string | null;
 };
 
 export default function StudentReceiptPanel({
@@ -92,6 +95,62 @@ export default function StudentReceiptPanel({
     );
     load();
     onChanged();
+  }
+
+  async function handleDelete(id: string, periodLabel: string) {
+    const confirmed = window.confirm(
+      `Delete the "${periodLabel}" receipt submitted by ${student.fullName}? This cannot be undone.`
+    );
+    if (!confirmed) return;
+    setBusyId(id);
+    setNotice("");
+    const res = await fetch(`/api/receipts/${id}`, { method: "DELETE" });
+    setBusyId(null);
+    if (!res.ok) {
+      play("error");
+      setNotice("Could not delete this receipt. Please try again.");
+      return;
+    }
+    play("success");
+    setNotice("Receipt deleted.");
+    load();
+    onChanged();
+  }
+
+  async function handleDownloadAck(id: string) {
+    setBusyId(id);
+    setNotice("");
+    try {
+      const res = await fetch(`/api/receipts/${id}/acknowledgement`);
+      if (!res.ok) {
+        let errMsg = "Could not generate the acknowledgement receipt.";
+        try {
+          const data = await res.json();
+          errMsg = data.error || errMsg;
+        } catch {
+          // response wasn't JSON; keep the default message
+        }
+        throw new Error(errMsg);
+      }
+      const blob = await res.blob();
+      const disposition = res.headers.get("Content-Disposition") || "";
+      const match = disposition.match(/filename="(.+)"/);
+      const filename = match ? match[1] : "Acknowledgement_Receipt.docx";
+
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      play("error");
+      setNotice(err.message || "Could not generate the acknowledgement receipt.");
+    } finally {
+      setBusyId(null);
+    }
   }
 
   async function handleSaveComment(id: string) {
@@ -189,6 +248,14 @@ export default function StudentReceiptPanel({
                   <StatusBadge status={r.status} />
                 </div>
 
+                {(r.totalAmount || r.purpose) && (
+                  <p className="mt-2 text-xs text-ink/60">
+                    {r.totalAmount && <span className="font-semibold">₱{r.totalAmount}</span>}
+                    {r.totalAmount && r.purpose && " · "}
+                    {r.purpose}
+                  </p>
+                )}
+
                 {r.fileUrl && (
                   <a
                     href={r.fileUrl}
@@ -221,6 +288,21 @@ export default function StudentReceiptPanel({
                       {busyId === r.id ? "Confirming…" : "Confirm & email student"}
                     </SoundButton>
                   )}
+                  <SoundButton
+                    variant="secondary"
+                    onClick={() => handleDownloadAck(r.id)}
+                    disabled={busyId === r.id}
+                  >
+                    {busyId === r.id ? "Preparing…" : "Download acknowledgement receipt"}
+                  </SoundButton>
+                  <SoundButton
+                    variant="danger"
+                    onClick={() => handleDelete(r.id, r.periodLabel)}
+                    disabled={busyId === r.id}
+                    sound="error"
+                  >
+                    Delete
+                  </SoundButton>
                 </div>
               </li>
             ))}
