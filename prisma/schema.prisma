@@ -1,0 +1,214 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  STUDENT
+  STAFF
+  SOCIAL_WORKER
+  ADMIN
+}
+
+// A generous range of cohort years so new batches never need a schema
+// migration as time passes. Which three of these count as "First/Second/
+// Third Year" at any given moment is NOT fixed here — see BatchSettings
+// and src/lib/batches.ts, which compute that dynamically and roll it
+// forward automatically every 12 months.
+enum Batch {
+  YEAR_2015
+  YEAR_2016
+  YEAR_2017
+  YEAR_2018
+  YEAR_2019
+  YEAR_2020
+  YEAR_2021
+  YEAR_2022
+  YEAR_2023
+  YEAR_2024
+  YEAR_2025
+  YEAR_2026
+  YEAR_2027
+  YEAR_2028
+  YEAR_2029
+  YEAR_2030
+  YEAR_2031
+  YEAR_2032
+  YEAR_2033
+  YEAR_2034
+  YEAR_2035
+  YEAR_2036
+  YEAR_2037
+  YEAR_2038
+  YEAR_2039
+  YEAR_2040
+  YEAR_2041
+  YEAR_2042
+  YEAR_2043
+  YEAR_2044
+  YEAR_2045
+  YEAR_2046
+  YEAR_2047
+  YEAR_2048
+  YEAR_2049
+  YEAR_2050
+  YEAR_2051
+  YEAR_2052
+  YEAR_2053
+  YEAR_2054
+  YEAR_2055
+  YEAR_2056
+  YEAR_2057
+  YEAR_2058
+  YEAR_2059
+  YEAR_2060
+}
+
+// Singleton row: which batch year currently counts as "First Year", and
+// when that was set. The other two active years are always one and two
+// years behind it. Every 12 months that pass since `setAt`, the effective
+// "First Year" advances by one — see currentFirstYear() in
+// src/lib/batches.ts. A class rep or admin can correct/override this at
+// any time (via PATCH /api/batch-settings), which resets the 12-month
+// clock from that moment.
+model BatchSettings {
+  id             String   @id
+  firstYearAtSet Int
+  setAt          DateTime @default(now())
+  setByUserId    String?
+  setByName      String?
+}
+
+enum ClassSection {
+  PN1
+  PN2
+}
+
+enum ReceiptStatus {
+  PENDING
+  CONFIRMED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  EXCUSED
+}
+
+model User {
+  id                  String    @id @default(cuid())
+  email               String    @unique
+  passwordHash        String
+  name                String
+  role                Role
+  resetToken          String?   @unique
+  resetTokenExpiresAt DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  student      Student?
+  staff        Staff?
+  socialWorker SocialWorker?
+  admin        Admin?
+}
+
+model Student {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName    String
+  batch       Batch
+  section     ClassSection @default(PN1) // each batch/year is split into two classes, PN1 and PN2
+  isClassRep  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  receipts    Receipt[]
+  attendance  Attendance[]
+
+  @@index([batch, section, fullName])
+}
+
+model Staff {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name   String
+}
+
+model SocialWorker {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name   String
+  batch  Batch? // assigned by admin; null until assigned
+
+  assignedAttendanceComments Attendance[] @relation("SocialWorkerComments")
+}
+
+model Admin {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name   String
+}
+
+model Receipt {
+  id             String        @id @default(cuid())
+  studentId      String
+  student        Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  fileUrl        String? // Vercel Blob URL; null if a manual/backdated entry with no scan
+  periodLabel    String // e.g. "Month 1 - July 2026"
+  submittedAt    DateTime // the date the payment/counterpart period actually covers
+  status         ReceiptStatus @default(PENDING)
+  staffComment   String?
+  addedManually  Boolean       @default(false)
+  confirmedAt    DateTime?
+  confirmedById  String?
+  createdAt      DateTime      @default(now())
+
+  // Details captured from the student for the printable Acknowledgement Receipt.
+  // Voucher No. is intentionally NOT stored here — staff fill that in by hand on the
+  // printed copy, since it's assigned at the point of physical release, not submission.
+  totalAmount    String?
+  amountInWords  String?
+  purpose        String?
+
+  @@index([studentId, submittedAt])
+}
+
+model Attendance {
+  id                  String            @id @default(cuid())
+  studentId           String
+  student             Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  date                DateTime // stored at midnight UTC for the calendar day
+  status              AttendanceStatus  @default(PRESENT)
+  excuseComment        String? // written by the class rep (legacy single-note field, kept for backwards compatibility)
+  socialWorkerComment String? // legacy single-note field, kept for backwards compatibility
+  socialWorkerId      String?
+  socialWorker        SocialWorker?     @relation("SocialWorkerComments", fields: [socialWorkerId], references: [id])
+  markedByUserId       String? // the class rep's user id
+  reviewedBySW        Boolean           @default(true) // false = unread notification for the social worker
+  updatedAt           DateTime          @updatedAt
+
+  comments            AttendanceComment[]
+
+  @@unique([studentId, date])
+  @@index([date])
+}
+
+model AttendanceComment {
+  id           String     @id @default(cuid())
+  attendanceId String
+  attendance   Attendance @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
+  authorUserId String
+  authorName   String
+  authorRole   Role
+  body         String
+  createdAt    DateTime   @default(now())
+
+  @@index([attendanceId, createdAt])
+}
