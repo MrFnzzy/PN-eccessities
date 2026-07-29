@@ -31,15 +31,15 @@ export async function GET() {
   if (!session) return NextResponse.json({ error: "Not authorized." }, { status: 403 });
 
   const socialWorkers = await prisma.socialWorker.findMany({
-    include: { user: { select: { email: true } } },
+    include: { user: { select: { id: true, email: true } } },
     orderBy: { name: "asc" },
   });
   const staff = await prisma.staff.findMany({
-    include: { user: { select: { email: true } } },
+    include: { user: { select: { id: true, email: true } } },
     orderBy: { name: "asc" },
   });
   const admins = await prisma.admin.findMany({
-    include: { user: { select: { email: true } } },
+    include: { user: { select: { id: true, email: true } } },
     orderBy: { name: "asc" },
   });
 

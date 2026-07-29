@@ -3,18 +3,22 @@
 import { useCallback, useEffect, useState } from "react";
 import SoundButton from "@/components/SoundButton";
 import { useSound } from "@/lib/useSound";
+import { useSession } from "next-auth/react";
 import { BATCHES, BATCH_LABEL, BatchKey } from "@/lib/batches";
 
-type SW = { id: string; name: string; batch: BatchKey | null; user: { email: string } };
-type Staff = { id: string; name: string; user: { email: string } };
+type SW = { id: string; name: string; batch: BatchKey | null; user: { id: string; email: string } };
+type Staff = { id: string; name: string; user: { id: string; email: string } };
 
 export default function AdminClient() {
   const play = useSound();
+  const { data: sessionData } = useSession();
+  const myUserId = (sessionData?.user as any)?.id as string | undefined;
   const [socialWorkers, setSocialWorkers] = useState<SW[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
   const [admins, setAdmins] = useState<Staff[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
+  const [removingId, setRemovingId] = useState<string | null>(null);
 
   const [form, setForm] = useState({ fullName: "", email: "", password: "", role: "STAFF" });
   const [creating, setCreating] = useState(false);
@@ -67,6 +71,31 @@ export default function AdminClient() {
     } else {
       play("error");
     }
+  }
+
+  async function removeAccount(userId: string, name: string) {
+    const confirmed = window.confirm(
+      `Remove ${name}'s account? This can't be undone — they'll be signed out and lose access immediately.`
+    );
+    if (!confirmed) return;
+
+    setRemovingId(userId);
+    setMessage("");
+    const res = await fetch("/api/admin/accounts", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId }),
+    });
+    const data = await res.json();
+    setRemovingId(null);
+    if (!res.ok) {
+      play("error");
+      setMessage(data.error);
+      return;
+    }
+    play("success");
+    setMessage(`${name}'s account was removed.`);
+    load();
   }
 
   return (
@@ -129,8 +158,21 @@ export default function AdminClient() {
             ) : (
               socialWorkers.map((sw) => (
                 <div key={sw.id} className="rounded-lg border border-ink/10 p-3">
-                  <p className="text-sm font-semibold text-ink">{sw.name}</p>
-                  <p className="text-xs text-ink/50">{sw.user.email}</p>
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-ink">{sw.name}</p>
+                      <p className="text-xs text-ink/50">{sw.user.email}</p>
+                    </div>
+                    {sw.user.id !== myUserId && (
+                      <button
+                        onClick={() => removeAccount(sw.user.id, sw.name)}
+                        disabled={removingId === sw.user.id}
+                        className="shrink-0 text-[11px] font-semibold text-amber-burnt hover:underline disabled:opacity-50"
+                      >
+                        {removingId === sw.user.id ? "Removing…" : "Remove"}
+                      </button>
+                    )}
+                  </div>
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     {BATCHES.map((b) => (
                       <button
@@ -158,8 +200,19 @@ export default function AdminClient() {
           <h3 className="font-display text-sm font-semibold text-ink">Staff accounts</h3>
           <ul className="mt-2 flex flex-col gap-1 text-sm text-ink/70">
             {staff.map((s) => (
-              <li key={s.id}>
-                {s.name} <span className="text-ink/40">· {s.user.email}</span>
+              <li key={s.id} className="flex items-center justify-between gap-2">
+                <span>
+                  {s.name} <span className="text-ink/40">· {s.user.email}</span>
+                </span>
+                {s.user.id !== myUserId && (
+                  <button
+                    onClick={() => removeAccount(s.user.id, s.name)}
+                    disabled={removingId === s.user.id}
+                    className="shrink-0 text-[11px] font-semibold text-amber-burnt hover:underline disabled:opacity-50"
+                  >
+                    {removingId === s.user.id ? "Removing…" : "Remove"}
+                  </button>
+                )}
               </li>
             ))}
           </ul>
@@ -168,8 +221,19 @@ export default function AdminClient() {
           <h3 className="font-display text-sm font-semibold text-ink">Admin accounts</h3>
           <ul className="mt-2 flex flex-col gap-1 text-sm text-ink/70">
             {admins.map((a) => (
-              <li key={a.id}>
-                {a.name} <span className="text-ink/40">· {a.user.email}</span>
+              <li key={a.id} className="flex items-center justify-between gap-2">
+                <span>
+                  {a.name} <span className="text-ink/40">· {a.user.email}</span>
+                </span>
+                {a.user.id !== myUserId && (
+                  <button
+                    onClick={() => removeAccount(a.user.id, a.name)}
+                    disabled={removingId === a.user.id}
+                    className="shrink-0 text-[11px] font-semibold text-amber-burnt hover:underline disabled:opacity-50"
+                  >
+                    {removingId === a.user.id ? "Removing…" : "Remove"}
+                  </button>
+                )}
               </li>
             ))}
           </ul>
